@@ -9,5 +9,5 @@ public abstract class DebouncingOnClickListener implements View.OnClickListener 
         doClick(v);
     }
 
-    abstract void doClick(View view);
+    public abstract void doClick(View view);
 }
