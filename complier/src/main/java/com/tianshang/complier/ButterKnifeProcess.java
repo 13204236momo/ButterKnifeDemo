@@ -13,6 +13,7 @@ import com.tianshang.complier.utils.Constants;
 import com.tianshang.complier.utils.EmptyUtils;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -108,12 +109,18 @@ public class ButterKnifeProcess extends AbstractProcessor {
         return false;
     }
 
+    /**
+     * 这个方法实现过程按照12345的顺序实现
+     * @throws IOException
+     */
     private void createJavaFile() throws IOException {
-//判断是否有需要生成的类文件
+        //判断是否有需要生成的类文件
         if (!EmptyUtils.isEmpty(tempBindViewMap)) {
 
             //获取接口的类型
             TypeElement viewBinderType = elementUtils.getTypeElement(Constants.VIEWBINDER);
+            TypeElement clickListenerType = elementUtils.getTypeElement(Constants.CLICKLISTENER);
+            TypeElement viewType = elementUtils.getTypeElement(Constants.VIEW);
 
             //从下往上写（javaPoet的技巧）
             for (Map.Entry<TypeElement, List<VariableElement>> entry : tempBindViewMap.entrySet()) {
@@ -142,10 +149,39 @@ public class ButterKnifeProcess extends AbstractProcessor {
                     //获取注解的值(如：R.id.tv_1)
                     int annotationValue = fieldElement.getAnnotation(BindView.class).value();
                     // target.tv1.findViewById(R.id.tv_1);
-                    String methodContent = "$N."+fieldName+"=$N.findViewById($L)";
+                    String methodContent = "$N." + fieldName + "=$N.findViewById($L)";
                     //加入方法内容
-                    methodBuilder.addStatement(methodContent,Constants.TARGET_PARAMETER_NAME,Constants.TARGET_PARAMETER_NAME,annotationValue);
+                    methodBuilder.addStatement(methodContent, Constants.TARGET_PARAMETER_NAME, Constants.TARGET_PARAMETER_NAME, annotationValue);
 
+                }
+
+                if (!EmptyUtils.isEmpty(tempOnClickMap)) {
+                    for (Map.Entry<TypeElement, List<ExecutableElement>> entry1 : tempOnClickMap.entrySet()) {
+                        if (className.equals(ClassName.get(entry1.getKey()))) {
+                            for (ExecutableElement executableElement : entry1.getValue()) {
+                                String methodName = executableElement.getSimpleName().toString();
+                                int[] value = executableElement.getAnnotation(OnClick.class).value();
+                                for (int i = 0; i < value.length; i++) {
+//                                    target.tv1.setOnClickListener(new DebouncingOnClickListener() {
+//                                        @Override
+//                                        public void doClick(View view) {
+//                                            target.onClick(view);
+//                                        }
+//                                    });
+                                    methodBuilder.beginControlFlow("$N.findViewById($L).setOnClickListener(new $T()",
+                                            Constants.TARGET_PARAMETER_NAME,
+                                            value[i],
+                                            ClassName.get(clickListenerType))
+                                            .beginControlFlow("public void doClick($T view)",
+                                                    ClassName.get(viewType))
+                                            .addStatement("$N." + methodName + ("(view)"), Constants.TARGET_PARAMETER_NAME)
+                                            .endControlFlow()
+                                            .endControlFlow(")")
+                                            .build();
+                                }
+                            }
+                        }
+                    }
                 }
 
                 //1.生成必须是同包;(属性的修饰符是缺失的)
